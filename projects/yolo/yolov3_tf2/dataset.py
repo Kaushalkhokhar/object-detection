@@ -2,6 +2,9 @@ from jinja2 import pass_context
 import tensorflow as tf
 from absl.flags import FLAGS
 
+import os
+import cv2
+
 @tf.function
 def transform_targets_for_output(y_true, grid_size, anchor_idxs):
     # y_true: (N, boxes, (x1, y1, x2, y2, class, best_anchor))
@@ -144,14 +147,33 @@ def load_fake_dataset():
 
     return tf.data.Dataset.from_tensor_slices((x_train, y_train))
 
-def load_image(path):
-    ifile = tf.data.Dataset.list_files(path, shuffle=False)
-    x = tf.io.decode_image(ifile, channels=3)
+###################################################
+"""
+My custom functionality
+"""
+###################################################
+
+def load_and_tranform_generator(image_path, anno_file):
+    for ifile in os.listdir(image_path):
+        ipath = os.path.join(image_path, ifile)
+        iid = int(ifile.split(".")[0])
+        x = cv2.imread(ipath)
+        y = [an["bbox"] + [an["category_id"]] for an in anno_file["annotations"] if an["image_id"] == iid]
+        yield x, tuple(y)
+
+def resize_dataset(x, y, resize_dims=(300, 350), resize=True):    
+    y_ = tf.shape(x)[0]
+    x_ = tf.shape(x)[1]
+
+    target_size = tf.constant(resize_dims)
     
-
-
-# my dataset pipeline
-def load_from_dataset_file(x_path, y_path):
-    # ds_counter = tf.data.Dataset.from_generator(count, args=[25], output_types=tf.int32, output_shapes = (), )
-
-    pass
+    scale = tf.divide(target_size, (y_, x_))
+    if resize: x = tf.image.resize(x, target_size)
+    x = tf.divide(x, 255)
+    
+    boxes, classes = tf.split(y, (4, 1), axis=-1)
+    if resize: boxes = tf.multiply(boxes, (scale[1], scale[0], scale[1], scale[0]))
+    y = tf.concat([boxes, classes], axis=-1)
+    paddings = [[0, 50 - tf.shape(y)[0]], [0, 0]]
+    y = tf.pad(y, paddings)
+    return x, y
