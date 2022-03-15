@@ -1,6 +1,8 @@
 from absl import app, flags, logging
 from absl.flags import FLAGS
 
+
+import os
 import tensorflow as tf
 import numpy as np
 import cv2
@@ -19,16 +21,25 @@ from yolov3_tf2.models import (
 from yolov3_tf2.utils import freeze_all
 import yolov3_tf2.dataset as dataset
 
-flags.DEFINE_string('dataset', '', 'path to dataset')
-flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
+# added flags
+BASE_PATH = os.getcwd()
+DATASET_PATH = os.path.join(BASE_PATH, "project", "datasets", "coco2017")
+MODEL_PATH = os.path.join(BASE_PATH, "project", "models")
+
+# defult is sufficient
+flags.DEFINE_string('dataset', os.path.join(DATASET_PATH, "train2017"), 'path to dataset')
+flags.DEFINE_string('val_dataset', os.path.join(DATASET_PATH, "valid2017"), 'path to validation dataset')
 flags.DEFINE_boolean('tiny', False, 'yolov3 or yolov3-tiny')
-flags.DEFINE_string('weights', './checkpoints/yolov3.tf',
+flags.DEFINE_string('weights', os.path.join(MODEL_PATH, "pathto.h5"),
                     'path to weights file')
 flags.DEFINE_string('classes', './data/coco.names', 'path to classes file')
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
                   'fit: model.fit, '
                   'eager_fit: model.fit(run_eagerly=True), '
                   'eager_tf: custom GradientTape')
+flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than 1 GPU.')
+
+# this flags need to be given for training
 flags.DEFINE_enum('transfer', 'none',
                   ['none', 'darknet', 'no_output', 'frozen', 'fine_tune'],
                   'none: Training from scratch, '
@@ -43,7 +54,6 @@ flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
 flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weights` file if different, '
                      'useful in transfer learning with different number of classes')
-flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than 1 GPU.')
 
 
 def setup_model():

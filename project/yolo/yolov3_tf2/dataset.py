@@ -1,3 +1,4 @@
+from jinja2 import pass_context
 import tensorflow as tf
 from absl.flags import FLAGS
 
@@ -142,3 +143,15 @@ def load_fake_dataset():
     y_train = tf.expand_dims(y_train, axis=0)
 
     return tf.data.Dataset.from_tensor_slices((x_train, y_train))
+
+def load_image(path):
+    ifile = tf.data.Dataset.list_files(path, shuffle=False)
+    x = tf.io.decode_image(ifile, channels=3)
+    
+
+
+# my dataset pipeline
+def load_from_dataset_file(x_path, y_path):
+    # ds_counter = tf.data.Dataset.from_generator(count, args=[25], output_types=tf.int32, output_shapes = (), )
+
+    pass
