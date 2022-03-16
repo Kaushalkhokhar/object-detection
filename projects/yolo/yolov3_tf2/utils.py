@@ -2,6 +2,8 @@ from absl import logging
 import numpy as np
 import tensorflow as tf
 import cv2
+import os
+import json
 
 YOLOV3_LAYER_LIST = [
     'yolo_darknet',
@@ -113,7 +115,7 @@ def draw_outputs(img, outputs, class_names):
     return img
 
 
-def draw_labels(x, y, class_names):
+def draw_labels_originals(x, y, class_names):
     img = x.numpy()
     boxes, classes = tf.split(y, (4, 1), axis=-1)
     classes = classes[..., 0]
@@ -133,3 +135,58 @@ def freeze_all(model, frozen=True):
     if isinstance(model, tf.keras.Model):
         for l in model.layers:
             freeze_all(l, frozen)
+
+################################################
+"""
+My custom fuctionality
+"""
+################################################
+
+
+def draw_labels(xs, ys, class_names):
+    imgs = xs.numpy()
+    for h in range(imgs.shape[0]):
+        img = imgs[h]
+        y = ys[h] 
+        boxes, classes = tf.split(y, (4, 1), axis=-1)
+        classes = tf.cast(classes, dtype=tf.int32)   
+        classes = classes[..., 0]
+        for i in range(len(boxes)):
+            if classes[i] == 0: continue
+            x1y1 = tuple(np.array(boxes[i][0:2]).astype(np.int32))
+            x2y2 = tuple(np.array(boxes[i][0:2] + boxes[i][2:4]).astype(np.int32))
+            img = cv2.rectangle(img, x1y1, x2y2, (1, 0, 0), 2)
+            img = cv2.putText(img, class_names[classes[i]],
+                            x1y1, cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5, (0, 0, 1), 1)
+        imgs[h] = img
+    return imgs
+
+def find_min_shape_and_path(image_path):
+    min_x = np.inf
+    min_y = np.inf
+    smallest_image_path = []
+    for ifile in os.listdir(image_path):
+        ipath = os.path.join(image_path, ifile)
+        x = cv2.imread(ipath)
+        if x.shape[0] < min_y: min_y = x.shape[0]
+        if x.shape[1] < min_x: min_x = x.shape[1]
+            
+        if x.shape[0] == min_y: smallest_image_path.append(ipath)
+        if x.shape[1] == min_x: smallest_image_path.append(ipath)
+        
+            
+    return min_x, min_y, smallest_image_path
+
+def get_classnames(file_path):
+    with open(file_path) as file:
+        jfile = json.load(file)
+
+    class_names = ["backgroud"]
+    i = 0
+    for item in jfile["categories"]:
+        for _ in range(item["id"]-i):
+            class_names.append(item["name"])
+        i = item["id"]
+
+    return class_names

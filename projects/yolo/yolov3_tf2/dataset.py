@@ -1,5 +1,12 @@
+from jinja2 import pass_context
 import tensorflow as tf
 from absl.flags import FLAGS
+from absl import flags
+
+import os
+import cv2
+
+
 
 @tf.function
 def transform_targets_for_output(y_true, grid_size, anchor_idxs):
@@ -142,3 +149,61 @@ def load_fake_dataset():
     y_train = tf.expand_dims(y_train, axis=0)
 
     return tf.data.Dataset.from_tensor_slices((x_train, y_train))
+
+###################################################
+"""
+My custom functionality
+"""
+###################################################
+
+def load_and_tranform_generator(image_path, anno_file):
+    for ifile in os.listdir(image_path):
+        ipath = os.path.join(image_path, ifile)
+        iid = int(ifile.split(".")[0])
+        x = cv2.imread(ipath)
+        y = [an["bbox"] + [an["category_id"]] for an in anno_file["annotations"] if an["image_id"] == iid]
+        yield x, tuple(y)
+
+def resize_dataset(x, y, resize_dims=(350, 300), resize=True):
+    """
+    here,
+    resize vector is (width, height)
+    x is of shape (None, None, 3) dimensions
+    y is of type (ymin, xmin, width, height, class) of shape (None, 5)
+    """
+
+    x_ = tf.shape(x)[0] # in numpy it is reverse
+    y_ = tf.shape(x)[1] # in numpy it is reverse
+
+    target_size = tf.constant(resize_dims)
+    target_size = tf.reverse(target_size, axis=(-1,))    
+    if resize: x = tf.image.resize(x, target_size)
+    x = tf.divide(x, 255)
+
+    scale = tf.divide(target_size, (x_, y_))
+
+    # original bouding box shape is [ymin, xmin, width, height]
+    boxes, classes = tf.split(y, (4, 1), axis=-1)
+    if resize: boxes = tf.multiply(boxes, (scale[1], scale[0], scale[1], scale[0]))
+    y = tf.concat([boxes, classes], axis=-1)
+    paddings = [[0, FLAGS.yolo_max_boxes - tf.shape(y)[0]], [0, 0]]
+    y = tf.pad(y, paddings)
+
+    return x, y
+
+def transform_target_coco(x, y, resize_dims=(350, 300), resize=True):
+    """
+    here,
+    resize vector is (width, height)
+    x is of shape (32, None, None, 3) dimensions
+    y is of shape (32, 100, (ymin, xmin, width, height, class))
+
+    after transformations
+    y is of shape (32, 100, (xmin, ymin, height, width, class))
+    """
+    y12, y34, classes = tf.split(y, (2, 2, 1), -1)
+    y12 = tf.reverse(y12, axis=(-1,))
+    y34 = tf.reverse(y34, axis=(-1,))
+
+    y = tf.concat([y12, y34, classes], axis=-1)
+    return x, y
