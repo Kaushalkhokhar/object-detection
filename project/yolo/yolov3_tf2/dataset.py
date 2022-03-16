@@ -142,3 +142,6 @@ def load_fake_dataset():
     y_train = tf.expand_dims(y_train, axis=0)
 
     return tf.data.Dataset.from_tensor_slices((x_train, y_train))
+
+
+def coco_transformation(x, y, ):
