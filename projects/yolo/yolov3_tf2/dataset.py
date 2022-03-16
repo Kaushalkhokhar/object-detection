@@ -174,24 +174,31 @@ def resize_dataset(x, y, resize_dims=(350, 300), resize=True):
 
     x_ = tf.shape(x)[0] # in numpy it is reverse
     y_ = tf.shape(x)[1] # in numpy it is reverse
+    boxes, classes = tf.split(y, (4, 1), axis=-1)
+
+    tf.print("original")
+    tf.print(tf.shape(x))
+    tf.print(boxes)
 
     target_size = tf.constant(resize_dims)
     target_size = tf.reverse(target_size, axis=(-1,))    
-    if resize: x = tf.image.resize(x, target_size)
+    if resize: x = tf.image.resize_with_pad(x, target_size[0], target_size[1])
     x = tf.divide(x, 255)
 
     scale = tf.divide(target_size, (x_, y_))
 
     # original bouding box shape is [ymin, xmin, width, height]
-    boxes, classes = tf.split(y, (4, 1), axis=-1)
     if resize: boxes = tf.multiply(boxes, (scale[1], scale[0], scale[1], scale[0]))
     y = tf.concat([boxes, classes], axis=-1)
     paddings = [[0, FLAGS.yolo_max_boxes - tf.shape(y)[0]], [0, 0]]
     y = tf.pad(y, paddings)
 
+    tf.print("transformed")
+    tf.print(tf.shape(x))
+    tf.print(boxes)
     return x, y
 
-def transform_target_coco(x, y, resize_dims=(350, 300), resize=True):
+def transform_target_coco(x, y):
     """
     here,
     resize vector is (width, height)
@@ -201,9 +208,32 @@ def transform_target_coco(x, y, resize_dims=(350, 300), resize=True):
     after transformations
     y is of shape (32, 100, (xmin, ymin, height, width, class))
     """
+
     y12, y34, classes = tf.split(y, (2, 2, 1), -1)
     y12 = tf.reverse(y12, axis=(-1,))
     y34 = tf.reverse(y34, axis=(-1,))
 
     y = tf.concat([y12, y34, classes], axis=-1)
+
+    return x, y
+
+
+def resize_dataset_presering_aspect_ratio(x, y, resize_dims=(350, 300), resize=True):
+
+    x_ = tf.shape(x)[0]
+    y_ = tf.shape(x)[1]
+    
+    target_size = tf.constant(resize_dims)
+    target_size = tf.reverse(target_size, axis=(-1,))    
+    if resize: x = tf.image.resize_with_pad(x, target_size)
+    x = tf.divide(x, 255)
+    
+
+
+    y12, y34, classes = tf.split(y, (2, 2, 1), -1)
+    y12 = tf.reverse(y12, axis=(-1,))
+    y34 = tf.reverse(y34, axis=(-1,))
+
+    y = tf.concat([y12, y34, classes], axis=-1)
+    
     return x, y

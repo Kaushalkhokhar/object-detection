@@ -9,7 +9,7 @@ from functools import partial
 import json
 import matplotlib.pyplot as plt
 
-from yolov3_tf2.dataset import load_and_tranform_generator, resize_dataset_visualization
+from yolov3_tf2.dataset import load_and_tranform_generator, resize_dataset
 from yolov3_tf2.utils import draw_labels, get_classnames
 
 DATASET_DIR = os.path.join(os.getcwd(), "datasets", "COCO-2017")
@@ -36,7 +36,7 @@ def visulizing_pipeline():
         FLAGS.val_image_path, anno_file),
             output_signature=(tf.TensorSpec(shape=(None, None, 3), dtype=tf.float32),
                 tf.TensorSpec(shape=(None, 5), dtype=tf.float32)))
-    dataset = dataset.map(lambda x, y: resize_dataset_visualization(x, y, FLAGS.resize))
+    dataset = dataset.map(lambda x, y: resize_dataset(x, y, FLAGS.resize))
     dataset = dataset.batch(FLAGS.batch_size)
 
     return dataset
