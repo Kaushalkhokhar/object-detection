@@ -1,6 +1,6 @@
 from absl import app, flags, logging
 from absl.flags import FLAGS
-
+from functools import partial
 
 import os
 import tensorflow as tf
@@ -23,16 +23,24 @@ import yolov3_tf2.dataset as dataset
 
 # added flags
 BASE_PATH = os.getcwd()
-DATASET_PATH = os.path.join(BASE_PATH, "project", "datasets", "coco2017")
-MODEL_PATH = os.path.join(BASE_PATH, "project", "models")
+DATASET_PATH = os.path.join(BASE_PATH, "projects", "datasets", "coco2017")
+MODEL_PATH = os.path.join(BASE_PATH, "projects", "models")
 
 # defult is sufficient
-flags.DEFINE_string('dataset', os.path.join(DATASET_PATH, "train2017"), 'path to dataset')
-flags.DEFINE_string('val_dataset', os.path.join(DATASET_PATH, "valid2017"), 'path to validation dataset')
+flags.DEFINE_string('train_dataset', os.path.join(
+    DATASET_PATH, "train2017", "train2017"), 'path to train dataset')
+flags.DEFINE_string('val_dataset', os.path.join(
+    DATASET_PATH, "valid2017"), 'path to validation dataset')
 flags.DEFINE_boolean('tiny', False, 'yolov3 or yolov3-tiny')
-flags.DEFINE_string('weights', os.path.join(MODEL_PATH, "pathto.h5"),
-                    'path to weights file')
+flags.DEFINE_string('weights', os.path.join(
+    MODEL_PATH, "pathto.h5"), 'path to weights file')
 flags.DEFINE_string('classes', './data/coco.names', 'path to classes file')
+flags.DEFINE_string('train_anno_path', os.path.join(
+    DATASET_PATH, 'annotations_trainval2017/annotations/instances_train2017.json'), 
+    'path to train annotations json file')
+flags.DEFINE_string('val_anno_path', os.path.join(
+    DATASET_PATH, 'annotations_trainval2017/annotations/instances_val2017.json'), 
+    'path to validation annotations json file')
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
                   'fit: model.fit, '
                   'eager_fit: model.fit(run_eagerly=True), '
@@ -48,8 +56,9 @@ flags.DEFINE_enum('transfer', 'none',
                   'frozen: Transfer and freeze all, '
                   'fine_tune: Transfer all and freeze darknet only')
 flags.DEFINE_integer('size', 416, 'image size')
+flags.DEFINE_list('resize', (416, 416), 'image resize in list format')
 flags.DEFINE_integer('epochs', 2, 'number of epochs')
-flags.DEFINE_integer('batch_size', 8, 'batch size')
+flags.DEFINE_integer('batch_size', 16, 'batch size')
 flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
 flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weights` file if different, '
@@ -132,8 +141,8 @@ def main(_argv):
         model, optimizer, loss, anchors, anchor_masks = setup_model()
 
     if FLAGS.dataset:
-        train_dataset = dataset.load_tfrecord_dataset(
-            FLAGS.dataset, FLAGS.classes, FLAGS.size)
+        train_dataset = tf.data.Dataset.from_generator(partial(dataset.load_and_tranform_generator, 
+            FLAGS.train_dataset, FLAGS.train_anno_path))
     else:
         train_dataset = dataset.load_fake_dataset()
     train_dataset = train_dataset.shuffle(buffer_size=512)
