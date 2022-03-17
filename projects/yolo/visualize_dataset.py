@@ -26,7 +26,7 @@ flags.DEFINE_string('val_anno_path', os.path.join(
     DATASET_DIR, 'annotations_trainval2017/annotations/instances_val2017.json'), 
     'path to validation annotations json file')
 flags.DEFINE_integer('batch_size', 4, 'batch size for visualizations')
-flags.DEFINE_list('resize', [450, 400], 'image resizing factor')
+flags.DEFINE_list('resize', [640, 480], 'image resizing factor')
 flags.DEFINE_integer('yolo_max_boxes', 100, 'maximum boxes passed to non max suppresion per image')
 
 def visulizing_pipeline():

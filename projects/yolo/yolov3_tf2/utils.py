@@ -151,7 +151,7 @@ def draw_labels_coco(xs, ys, class_names):
         boxes, classes = tf.split(y, (4, 1), axis=-1)
         classes = tf.cast(classes, dtype=tf.int32)   
         classes = classes[..., 0]
-        for i in range(len(boxes)):
+        for i in range(1):
             if classes[i] == 0: continue
             x1y1 = tuple(np.array(np.flip(boxes[i][0:2])).astype(np.int32))
             x2y2 = tuple(np.array(np.flip(boxes[i][2:4])).astype(np.int32))

@@ -1,4 +1,5 @@
 from jinja2 import pass_context
+from numpy import dtype
 import tensorflow as tf
 from absl.flags import FLAGS
 from absl import flags
@@ -217,22 +218,6 @@ def resize_dataset_presering_aspect_ratio(x, y, resize_dims=(350, 300)):
     - Expected image/x shape (None, None, 3)
     - Expected target/y shape (None, 5)
 
-    # pseudo code
-    - pre-defined rescale variable of shape (2, )
-    - pre-defined shift variable of shape (2, )
-    - find the aspect ratio of original image
-    - compare the argmax of image with resize vector
-    - if same:
-        rescale[argmax[resize]] = resize[argmax]
-        rescale[argmin[resize]] = resize[argmax] / ar
-        shift[argmax[resize]] = 0
-        shift[argmin[resize]] = (resize[argmin] - resize[argmax] / ar) / 2
-    - else:
-        rescale[argmin[resize]] = resize[argmin]
-        rescale[argmax[resize]] = resize[argmin] * ar
-        shift[argmin[resize]] = 0
-        shift[argmax[resize]] = (resize[argmax] - resize[argmin] * ar) / 2
-
     x_ = tf.shape(x)[0]
     y_ = tf.shape(x)[1]
     """
@@ -241,23 +226,27 @@ def resize_dataset_presering_aspect_ratio(x, y, resize_dims=(350, 300)):
     target_size = tf.reverse(target_size, axis=(-1,))    
     
     # finding scaling and shifting
-    scale = tf.zeros(2, dtype=tf.float32)
     shift = tf.zeros(2, dtype=tf.float32)
-    ar = tf.cast(tf.shape(x)[1]/tf.shape(x)[0], dtype=tf.float32)
-    max_ = tf.cast(target_size[tf.argmax(target_size)], dtype=tf.float32) 
-    min_ = tf.cast(target_size[tf.argmin(target_size)], dtype=tf.float32) 
-    if tf.argmax(tf.shape(x)[:-1]) == tf.argmax(target_size):
-        indexes = [[tf.argmax(target_size)], [tf.argmin(target_size)]]
-        updates_scale = [max_, max_ / ar]
-        updates_shift = [0, (min_ - max_ / ar) / 2]
+    if tf.shape(x)[0] != tf.shape(x)[1]:
+        argmax = tf.argmax(tf.shape(x)[:-1])
+    elif target_size[0] != target_size[1]:
+        argmax = tf.argmax(target_size)
     else:
-        indexes = [[tf.argmin(target_size)], [tf.argmax(target_size)]]
-        updates_scale = [min_, min_ * ar]
-        updates_shift = [0, (max_ - min_ * ar) / 2]
+        argmax = tf.constant(0, dtype=tf.int64)
+    argmin = tf.constant(0, dtype=tf.int64) if argmax != 0 else tf.constant(1, dtype=tf.int64)
+    ar = tf.cast(tf.shape(x)[argmax]/tf.shape(x)[argmin], dtype=tf.float32)
+    max_ = tf.cast(target_size[argmax], dtype=tf.float32) 
+    min_ = tf.cast(target_size[argmin], dtype=tf.float32) 
+    if tf.argmax(tf.shape(x)[:-1]) == argmax and tf.shape(x)[0] != tf.shape(x)[1]:
+        indexes = [[argmax], [argmin]]
+        updates = [0, (min_ - max_ / ar) / 2]
+        scale = max_ / tf.cast(tf.shape(x)[argmax], dtype=tf.float32)
+    else:
+        indexes = [[argmin], [argmax]]
+        updates = [0, (max_ - min_ * ar) / 2]
+        scale = min_ / tf.cast(tf.shape(x)[argmin], dtype=tf.float32)
     
-    scale = tf.tensor_scatter_nd_update(scale, indexes, updates_scale)
-    scale = tf.divide(scale, (tf.shape(x)[0], tf.shape(x)[1]))
-    shift = tf.tensor_scatter_nd_update(shift, indexes, updates_shift)
+    shift = tf.tensor_scatter_nd_update(shift, indexes, updates)
 
     # resize image
     x = tf.image.resize_with_pad(x, target_size[0], target_size[1])
@@ -266,7 +255,7 @@ def resize_dataset_presering_aspect_ratio(x, y, resize_dims=(350, 300)):
     # resize bouding box 
     # original bouding box shape is [ymin, xmin, width, height]
     boxes, classes = tf.split(y, (4, 1), axis=-1)
-    boxes = tf.multiply(boxes, (scale[1], scale[0], scale[1], scale[0]))
+    boxes = tf.multiply(boxes, scale)
     boxes = tf.add(boxes, (shift[1], shift[0], 0, 0))
     y = tf.concat([boxes, classes], axis=-1)
 
