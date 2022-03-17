@@ -56,11 +56,11 @@ flags.DEFINE_enum('transfer', 'none',
                   'frozen: Transfer and freeze all, '
                   'fine_tune: Transfer all and freeze darknet only')
 flags.DEFINE_integer('size', 416, 'image size')
-flags.DEFINE_list('resize', (416, 416), 'image resize in list format as [height, width]')
-flags.DEFINE_integer('epochs', 2, 'number of epochs')
+flags.DEFINE_list('resize', (416, 410), 'image resize in list format as [height, width]')
+flags.DEFINE_integer('epochs', 1, 'number of epochs')
 flags.DEFINE_integer('batch_size', 16, 'batch size')
 flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
-flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
+flags.DEFINE_integer('num_classes', 81, 'number of classes in the model')
 flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weights` file if different, '
                      'useful in transfer learning with different number of classes')
 

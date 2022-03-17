@@ -29,7 +29,7 @@ flags.DEFINE_integer('batch_size', 8, 'batch size for visualizations')
 flags.DEFINE_list('resize', [640, 480], 'image resizing factor as [height, width]')
 flags.DEFINE_integer('yolo_max_boxes', 100, 'maximum boxes passed to non max suppresion per image')
 
-def visulizing_pipeline():
+def visualizing_pipeline():
     assert (FLAGS.batch_size % 2) == 0 and FLAGS.batch_size >= 4, "batch size must be even number and greater than 3"
     with open(FLAGS.val_anno_path) as file:
         anno_file = json.load(file)
@@ -45,8 +45,8 @@ def visulizing_pipeline():
 
 def main(_argv):
 
-    class_names = get_classnames(FLAGS.val_anno_path)
-    dataset = visulizing_pipeline()
+    class_names = get_classnames(FLAGS.train_anno_path)
+    dataset = visualizing_pipeline()
 
     fig = plt.figure(figsize=(15, 15))  # width, height in inches
     for i in dataset.take(1):
