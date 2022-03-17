@@ -176,10 +176,6 @@ def resize_dataset(x, y, resize_dims=(350, 300), resize=True):
     y_ = tf.shape(x)[1] # in numpy it is reverse
     boxes, classes = tf.split(y, (4, 1), axis=-1)
 
-    tf.print("original")
-    tf.print(tf.shape(x))
-    tf.print(boxes)
-
     target_size = tf.constant(resize_dims)
     target_size = tf.reverse(target_size, axis=(-1,))    
     if resize: x = tf.image.resize_with_pad(x, target_size[0], target_size[1])
@@ -193,9 +189,6 @@ def resize_dataset(x, y, resize_dims=(350, 300), resize=True):
     paddings = [[0, FLAGS.yolo_max_boxes - tf.shape(y)[0]], [0, 0]]
     y = tf.pad(y, paddings)
 
-    tf.print("transformed")
-    tf.print(tf.shape(x))
-    tf.print(boxes)
     return x, y
 
 def transform_target_coco(x, y):
@@ -219,21 +212,63 @@ def transform_target_coco(x, y):
 
 
 def resize_dataset_presering_aspect_ratio(x, y, resize_dims=(350, 300), resize=True):
+    """
+    # pseudo code
+    - pre-defined rescale variable of shape (2, )
+    - pre-defined shift variable of shape (2, )
+    - find the aspect ratio of original image
+    - compare the argmax of image with resize vector
+    - if same:
+        rescale[argmax[resize]] = resize[argmax]
+        rescale[argmin[resize]] = resize[argmax] / ar
+        shift[argmax[resize]] = 0
+        shift[argmin[resize]] = (resize[argmin] - resize[argmax] / ar) / 2
+    - else:
+        rescale[argmin[resize]] = resize[argmin]
+        rescale[argmax[resize]] = resize[argmin] * ar
+        shift[argmin[resize]] = 0
+        shift[argmax[resize]] = (resize[argmax] - resize[argmin] * ar) / 2
+
 
     x_ = tf.shape(x)[0]
     y_ = tf.shape(x)[1]
+    """
     
     target_size = tf.constant(resize_dims)
     target_size = tf.reverse(target_size, axis=(-1,))    
-    if resize: x = tf.image.resize_with_pad(x, target_size)
+    
+    # finding scaling and shifting
+    scale = tf.zeros(2, dtype=tf.float32)
+    shift = tf.zeros(2, dtype=tf.float32)
+    ar = tf.cast(tf.shape(x)[1]/tf.shape(x)[0], dtype=tf.float32)
+    max = tf.cast(target_size[tf.argmax(target_size)], dtype=tf.float32) 
+    min = tf.cast(target_size[tf.argmin(target_size)], dtype=tf.float32) 
+    if tf.argmax(tf.shape(x)[:-1]) == tf.argmax(target_size):
+        indexes = [[tf.argmax(target_size)], [tf.argmin(target_size)]]
+        updates_scale = [max, max / ar]
+        updates_shift = [0, (min - max / ar) / 2]
+    else:
+        indexes = [[tf.argmin(target_size)], [tf.argmax(target_size)]]
+        updates_scale = [min, min * ar]
+        updates_shift = [0, (max - min * ar) / 2]
+    scale = tf.tensor_scatter_nd_update(scale, indexes, updates_scale)
+    shift = tf.tensor_scatter_nd_update(shift, indexes, updates_shift)
+    scale = tf.divide(scale, (tf.shape(x)[0], tf.shape(x)[1]))
+
+    # resize image
+    if resize: x = tf.image.resize_with_pad(x, target_size[0], target_size[1])
     x = tf.divide(x, 255)
-    
 
+    # resize bouding box 
+    # original bouding box shape is [ymin, xmin, width, height]
+    boxes, classes = tf.split(y, (4, 1), axis=-1)
+    if resize: 
+        boxes = tf.multiply(boxes, (scale[1], scale[0], scale[1], scale[0]))
+        boxes = tf.add(boxes, (shift[1], shift[0], 0, 0))
+    y = tf.concat([boxes, classes], axis=-1)
 
-    y12, y34, classes = tf.split(y, (2, 2, 1), -1)
-    y12 = tf.reverse(y12, axis=(-1,))
-    y34 = tf.reverse(y34, axis=(-1,))
+    paddings = [[0, FLAGS.yolo_max_boxes - tf.shape(y)[0]], [0, 0]]
+    y = tf.pad(y, paddings)
 
-    y = tf.concat([y12, y34, classes], axis=-1)
-    
     return x, y
+    
