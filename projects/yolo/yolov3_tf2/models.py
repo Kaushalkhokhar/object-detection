@@ -29,12 +29,12 @@ flags.DEFINE_float('yolo_score_threshold', 0.5, 'score threshold')
 
 yolo_anchors = np.array([(10, 13), (16, 30), (33, 23), (30, 61), (62, 45),
                          (59, 119), (116, 90), (156, 198), (373, 326)],
-                        np.float32) / FLAGS.size
+                        np.float32) / FLAGS.resize
 yolo_anchor_masks = np.array([[6, 7, 8], [3, 4, 5], [0, 1, 2]])
 
 yolo_tiny_anchors = np.array([(10, 14), (23, 27), (37, 58),
                               (81, 82), (135, 169),  (344, 319)],
-                             np.float32) / FLAGS.size
+                             np.float32) / FLAGS.resize
 yolo_tiny_anchor_masks = np.array([[3, 4, 5], [0, 1, 2]])
 
 
@@ -233,9 +233,9 @@ def yolo_nms(outputs, anchors, masks, classes):
     return boxes, scores, classes, valid_detections
 
 
-def YoloV3(size=None, channels=3, anchors=yolo_anchors,
+def YoloV3(resize=None, channels=3, anchors=yolo_anchors,
            masks=yolo_anchor_masks, classes=80, training=False):
-    x = inputs = Input([size, size, channels], name='input')
+    x = inputs = Input([resize[0], resize[1], channels], name='input')
 
     x_36, x_61, x = Darknet(name='yolo_darknet')(x)
 
@@ -264,9 +264,9 @@ def YoloV3(size=None, channels=3, anchors=yolo_anchors,
     return Model(inputs, outputs, name='yolov3')
 
 
-def YoloV3Tiny(size=None, channels=3, anchors=yolo_tiny_anchors,
+def YoloV3Tiny(resize=None, channels=3, anchors=yolo_tiny_anchors,
                masks=yolo_tiny_anchor_masks, classes=80, training=False):
-    x = inputs = Input([size, size, channels], name='input')
+    x = inputs = Input([resize[0], resize[1], channels], name='input')
 
     x_8, x = DarknetTiny(name='yolo_darknet')(x)
 

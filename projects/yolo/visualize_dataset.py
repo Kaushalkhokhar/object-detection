@@ -25,8 +25,8 @@ flags.DEFINE_string('val_image_path', os.path.join(
 flags.DEFINE_string('val_anno_path', os.path.join(
     DATASET_DIR, 'annotations_trainval2017/annotations/instances_val2017.json'), 
     'path to validation annotations json file')
-flags.DEFINE_integer('batch_size', 4, 'batch size for visualizations')
-flags.DEFINE_list('resize', [640, 480], 'image resizing factor')
+flags.DEFINE_integer('batch_size', 8, 'batch size for visualizations')
+flags.DEFINE_list('resize', [640, 480], 'image resizing factor as [height, width]')
 flags.DEFINE_integer('yolo_max_boxes', 100, 'maximum boxes passed to non max suppresion per image')
 
 def visulizing_pipeline():
@@ -38,7 +38,7 @@ def visulizing_pipeline():
             output_signature=(tf.TensorSpec(shape=(None, None, 3), dtype=tf.float32),
                 tf.TensorSpec(shape=(None, 5), dtype=tf.float32)))
     dataset = dataset.map(lambda x, y: resize_dataset_presering_aspect_ratio(x, y, FLAGS.resize))
-    dataset = dataset.map(lambda x, y: split_and_transform_target_columns(x, y))
+    dataset = dataset.map(lambda x, y: (x, split_and_transform_target_columns(y)))
     dataset = dataset.batch(FLAGS.batch_size)
 
     return dataset
@@ -53,7 +53,7 @@ def main(_argv):
         xs, ys = i
         imgs = draw_labels_coco(xs, ys, class_names)
         for j in range(FLAGS.batch_size):
-            sub = fig.add_subplot(FLAGS.batch_size//2, FLAGS.batch_size//2, j + 1)
+            sub = fig.add_subplot(FLAGS.batch_size//2, 2, j + 1)
             sub.imshow(imgs[j,:,:, :], interpolation='nearest')
     plt.show()
 
