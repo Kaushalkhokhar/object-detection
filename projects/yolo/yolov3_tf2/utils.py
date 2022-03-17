@@ -143,7 +143,7 @@ My custom fuctionality
 ################################################
 
 
-def draw_labels(xs, ys, class_names):
+def draw_labels_coco(xs, ys, class_names):
     imgs = xs.numpy()
     for h in range(imgs.shape[0]):
         img = imgs[h]
@@ -153,8 +153,8 @@ def draw_labels(xs, ys, class_names):
         classes = classes[..., 0]
         for i in range(len(boxes)):
             if classes[i] == 0: continue
-            x1y1 = tuple(np.array(boxes[i][0:2]).astype(np.int32))
-            x2y2 = tuple(np.array(boxes[i][0:2] + boxes[i][2:4]).astype(np.int32))
+            x1y1 = tuple(np.array(np.flip(boxes[i][0:2])).astype(np.int32))
+            x2y2 = tuple(np.array(np.flip(boxes[i][2:4])).astype(np.int32))
             img = cv2.rectangle(img, x1y1, x2y2, (1, 0, 0), 2)
             img = cv2.putText(img, class_names[classes[i]],
                             x1y1, cv2.FONT_HERSHEY_SIMPLEX,

@@ -9,8 +9,9 @@ from functools import partial
 import json
 import matplotlib.pyplot as plt
 
-from yolov3_tf2.dataset import load_and_tranform_generator, resize_dataset, resize_dataset_presering_aspect_ratio
-from yolov3_tf2.utils import draw_labels, get_classnames
+from yolov3_tf2.dataset import (load_and_tranform_generator, resize_dataset, 
+    resize_dataset_presering_aspect_ratio, split_and_transform_target_columns)
+from yolov3_tf2.utils import draw_labels_coco, get_classnames
 
 DATASET_DIR = os.path.join(os.getcwd(), "datasets", "COCO-2017")
 
@@ -25,7 +26,7 @@ flags.DEFINE_string('val_anno_path', os.path.join(
     DATASET_DIR, 'annotations_trainval2017/annotations/instances_val2017.json'), 
     'path to validation annotations json file')
 flags.DEFINE_integer('batch_size', 4, 'batch size for visualizations')
-flags.DEFINE_list('resize', [350, 300], 'image resizing factor')
+flags.DEFINE_list('resize', [450, 400], 'image resizing factor')
 flags.DEFINE_integer('yolo_max_boxes', 100, 'maximum boxes passed to non max suppresion per image')
 
 def visulizing_pipeline():
@@ -37,6 +38,7 @@ def visulizing_pipeline():
             output_signature=(tf.TensorSpec(shape=(None, None, 3), dtype=tf.float32),
                 tf.TensorSpec(shape=(None, 5), dtype=tf.float32)))
     dataset = dataset.map(lambda x, y: resize_dataset_presering_aspect_ratio(x, y, FLAGS.resize))
+    dataset = dataset.map(lambda x, y: split_and_transform_target_columns(x, y))
     dataset = dataset.batch(FLAGS.batch_size)
 
     return dataset
@@ -49,7 +51,7 @@ def main(_argv):
     fig = plt.figure(figsize=(15, 15))  # width, height in inches
     for i in dataset.take(1):
         xs, ys = i
-        imgs = draw_labels(xs, ys, class_names)
+        imgs = draw_labels_coco(xs, ys, class_names)
         for j in range(FLAGS.batch_size):
             sub = fig.add_subplot(FLAGS.batch_size//2, FLAGS.batch_size//2, j + 1)
             sub.imshow(imgs[j,:,:, :], interpolation='nearest')

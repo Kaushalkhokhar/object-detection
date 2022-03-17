@@ -164,7 +164,7 @@ def load_and_tranform_generator(image_path, anno_file):
         y = [an["bbox"] + [an["category_id"]] for an in anno_file["annotations"] if an["image_id"] == iid]
         yield x, tuple(y)
 
-def resize_dataset(x, y, resize_dims=(350, 300), resize=True):
+def resize_dataset(x, y, resize_dims=(350, 300)):
     """
     here,
     resize vector is (width, height)
@@ -178,41 +178,45 @@ def resize_dataset(x, y, resize_dims=(350, 300), resize=True):
 
     target_size = tf.constant(resize_dims)
     target_size = tf.reverse(target_size, axis=(-1,))    
-    if resize: x = tf.image.resize_with_pad(x, target_size[0], target_size[1])
+    x = tf.image.resize_with_pad(x, target_size[0], target_size[1])
     x = tf.divide(x, 255)
 
     scale = tf.divide(target_size, (x_, y_))
 
     # original bouding box shape is [ymin, xmin, width, height]
-    if resize: boxes = tf.multiply(boxes, (scale[1], scale[0], scale[1], scale[0]))
+    boxes = tf.multiply(boxes, (scale[1], scale[0], scale[1], scale[0]))
     y = tf.concat([boxes, classes], axis=-1)
     paddings = [[0, FLAGS.yolo_max_boxes - tf.shape(y)[0]], [0, 0]]
     y = tf.pad(y, paddings)
 
     return x, y
 
-def transform_target_coco(x, y):
+def split_and_transform_target_columns(x, y):
     """
-    here,
-    resize vector is (width, height)
-    x is of shape (32, None, None, 3) dimensions
-    y is of shape (32, 100, (ymin, xmin, width, height, class))
+    - N is batch_size
+    - x is of shape (N, None, None, 3) dimensions
+    - y is of shape (N, 100, (ymin, xmin, width, height, class))
 
-    after transformations
-    y is of shape (32, 100, (xmin, ymin, height, width, class))
+    - after transformations
+        y is of shape (N, 100, (xmin, ymin, xmax, ymin, class))
     """
 
     y12, y34, classes = tf.split(y, (2, 2, 1), -1)
     y12 = tf.reverse(y12, axis=(-1,))
     y34 = tf.reverse(y34, axis=(-1,))
+    y34 = tf.add(y12, y34)
 
     y = tf.concat([y12, y34, classes], axis=-1)
 
     return x, y
 
 
-def resize_dataset_presering_aspect_ratio(x, y, resize_dims=(350, 300), resize=True):
+def resize_dataset_presering_aspect_ratio(x, y, resize_dims=(350, 300)):
     """
+    - Resize the image and boudning box by maitaining aspect ratio.
+    - Expected image/x shape (None, None, 3)
+    - Expected target/y shape (None, 5)
+
     # pseudo code
     - pre-defined rescale variable of shape (2, )
     - pre-defined shift variable of shape (2, )
@@ -229,7 +233,6 @@ def resize_dataset_presering_aspect_ratio(x, y, resize_dims=(350, 300), resize=T
         shift[argmin[resize]] = 0
         shift[argmax[resize]] = (resize[argmax] - resize[argmin] * ar) / 2
 
-
     x_ = tf.shape(x)[0]
     y_ = tf.shape(x)[1]
     """
@@ -241,30 +244,30 @@ def resize_dataset_presering_aspect_ratio(x, y, resize_dims=(350, 300), resize=T
     scale = tf.zeros(2, dtype=tf.float32)
     shift = tf.zeros(2, dtype=tf.float32)
     ar = tf.cast(tf.shape(x)[1]/tf.shape(x)[0], dtype=tf.float32)
-    max = tf.cast(target_size[tf.argmax(target_size)], dtype=tf.float32) 
-    min = tf.cast(target_size[tf.argmin(target_size)], dtype=tf.float32) 
+    max_ = tf.cast(target_size[tf.argmax(target_size)], dtype=tf.float32) 
+    min_ = tf.cast(target_size[tf.argmin(target_size)], dtype=tf.float32) 
     if tf.argmax(tf.shape(x)[:-1]) == tf.argmax(target_size):
         indexes = [[tf.argmax(target_size)], [tf.argmin(target_size)]]
-        updates_scale = [max, max / ar]
-        updates_shift = [0, (min - max / ar) / 2]
+        updates_scale = [max_, max_ / ar]
+        updates_shift = [0, (min_ - max_ / ar) / 2]
     else:
         indexes = [[tf.argmin(target_size)], [tf.argmax(target_size)]]
-        updates_scale = [min, min * ar]
-        updates_shift = [0, (max - min * ar) / 2]
+        updates_scale = [min_, min_ * ar]
+        updates_shift = [0, (max_ - min_ * ar) / 2]
+    
     scale = tf.tensor_scatter_nd_update(scale, indexes, updates_scale)
-    shift = tf.tensor_scatter_nd_update(shift, indexes, updates_shift)
     scale = tf.divide(scale, (tf.shape(x)[0], tf.shape(x)[1]))
+    shift = tf.tensor_scatter_nd_update(shift, indexes, updates_shift)
 
     # resize image
-    if resize: x = tf.image.resize_with_pad(x, target_size[0], target_size[1])
+    x = tf.image.resize_with_pad(x, target_size[0], target_size[1])
     x = tf.divide(x, 255)
 
     # resize bouding box 
     # original bouding box shape is [ymin, xmin, width, height]
     boxes, classes = tf.split(y, (4, 1), axis=-1)
-    if resize: 
-        boxes = tf.multiply(boxes, (scale[1], scale[0], scale[1], scale[0]))
-        boxes = tf.add(boxes, (shift[1], shift[0], 0, 0))
+    boxes = tf.multiply(boxes, (scale[1], scale[0], scale[1], scale[0]))
+    boxes = tf.add(boxes, (shift[1], shift[0], 0, 0))
     y = tf.concat([boxes, classes], axis=-1)
 
     paddings = [[0, FLAGS.yolo_max_boxes - tf.shape(y)[0]], [0, 0]]
