@@ -56,7 +56,7 @@ flags.DEFINE_enum('transfer', 'none',
                   'frozen: Transfer and freeze all, '
                   'fine_tune: Transfer all and freeze darknet only')
 flags.DEFINE_integer('size', 416, 'image size')
-flags.DEFINE_list('resize', (416, 410), 'image resize in list format as [height, width]')
+flags.DEFINE_list('resize', [416, 416], 'image resize in list format as [height, width]')
 flags.DEFINE_integer('epochs', 1, 'number of epochs')
 flags.DEFINE_integer('batch_size', 16, 'batch size')
 flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
@@ -140,33 +140,33 @@ def main(_argv):
     else:
         model, optimizer, loss, anchors, anchor_masks = setup_model()
 
-    if FLAGS.dataset:
+    if FLAGS.train_dataset:
         train_dataset = tf.data.Dataset.from_generator(partial(dataset.load_and_tranform_generator, 
-            FLAGS.train_image_path, FLAGS.train_anno_path),
+            FLAGS.train_dataset, FLAGS.train_anno_path),
                 output_signature=(tf.TensorSpec(shape=(None, None, 3), dtype=tf.float32),
                     tf.TensorSpec(shape=(None, 5), dtype=tf.float32)))
         train_dataset = train_dataset.map(lambda x, y: dataset.resize_dataset_presering_aspect_ratio(x, y, FLAGS.resize))
-        train_dataset = train_dataset.map(lambda x, y: dataset.split_and_transform_target_columns(x, y))
+        train_dataset = train_dataset.map(lambda x, y: (x, dataset.split_and_transform_target_columns(y)))
     else:
         train_dataset = dataset.load_fake_dataset()
     train_dataset = train_dataset.shuffle(buffer_size=512)
     train_dataset = train_dataset.batch(FLAGS.batch_size)
-    train_dataset = train_dataset.map(lambda x, y: (x, dataset.transform_targets(y, anchors, anchor_masks, FLAGS.resize)))
+    train_dataset = train_dataset.map(lambda x, y: (x, dataset.transform_targets_coco(y, anchors, anchor_masks, FLAGS.resize)))
     train_dataset = train_dataset.prefetch(
         buffer_size=tf.data.experimental.AUTOTUNE)
 
     if FLAGS.val_dataset:
         val_dataset = tf.data.Dataset.from_generator(partial(dataset.load_and_tranform_generator, 
-            FLAGS.val_image_path, FLAGS.val_anno_path),
+            FLAGS.val_dataset, FLAGS.val_anno_path),
                 output_signature=(tf.TensorSpec(shape=(None, None, 3), dtype=tf.float32),
                     tf.TensorSpec(shape=(None, 5), dtype=tf.float32)))
         val_dataset = val_dataset.map(lambda x, y: dataset.resize_dataset_presering_aspect_ratio(x, y, FLAGS.resize))
-        val_dataset = val_dataset.map(lambda x, y: dataset.split_and_transform_target_columns(x, y))
+        val_dataset = val_dataset.map(lambda x, y: (x, dataset.split_and_transform_target_columns(y)))
     else:
         val_dataset = dataset.load_fake_dataset()
     val_dataset = val_dataset.shuffle(buffer_size=512)
     val_dataset = val_dataset.batch(FLAGS.batch_size)
-    val_dataset = val_dataset.map(lambda x, y: (x, dataset.transform_targets(y, anchors, anchor_masks, FLAGS.resize)))
+    val_dataset = val_dataset.map(lambda x, y: (x, dataset.transform_targets_coco(y, anchors, anchor_masks, FLAGS.resize)))
     val_dataset = val_dataset.prefetch(
         buffer_size=tf.data.experimental.AUTOTUNE)
 

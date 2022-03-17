@@ -289,7 +289,7 @@ def transform_targets_for_output_coco(y_true, grid_size, anchor_idxs):
                 box_xy = (y_true[i][j][0:2] + y_true[i][j][2:4]) / 2
 
                 anchor_idx = tf.cast(tf.where(anchor_eq), tf.int32)
-                grid_xy = tf.cast(box_xy // (1/grid_size), tf.int32)
+                grid_xy = tf.cast(box_xy // (1/grid_size[0]), tf.int32)
 
                 # grid[y][x][anchor] = (tx, ty, bw, bh, obj, class)
                 indexes = indexes.write(
