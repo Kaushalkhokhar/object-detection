@@ -3,6 +3,7 @@ from absl.flags import FLAGS
 from functools import partial
 
 import os
+import json
 import tensorflow as tf
 import numpy as np
 import cv2
@@ -23,8 +24,8 @@ import yolov3_tf2.dataset as dataset
 
 # added flags
 BASE_PATH = os.getcwd()
-DATASET_PATH = os.path.join(BASE_PATH, "projects", "datasets", "coco2017")
-MODEL_PATH = os.path.join(BASE_PATH, "projects", "models")
+DATASET_PATH = os.path.join(BASE_PATH, "datasets", "coco-2017")
+MODEL_PATH = os.path.join(BASE_PATH, "models")
 
 # defult is sufficient
 flags.DEFINE_string('train_dataset', os.path.join(
@@ -56,7 +57,6 @@ flags.DEFINE_enum('transfer', 'none',
                   'frozen: Transfer and freeze all, '
                   'fine_tune: Transfer all and freeze darknet only')
 flags.DEFINE_integer('size', 416, 'image size')
-flags.DEFINE_list('resize', [416, 416], 'image resize in list format as [height, width]')
 flags.DEFINE_integer('epochs', 1, 'number of epochs')
 flags.DEFINE_integer('batch_size', 16, 'batch size')
 flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
@@ -67,12 +67,12 @@ flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weight
 
 def setup_model():
     if FLAGS.tiny:
-        model = YoloV3Tiny(FLAGS.resize, training=True,
+        model = YoloV3Tiny(FLAGS.size, training=True,
                            classes=FLAGS.num_classes)
         anchors = yolo_tiny_anchors
         anchor_masks = yolo_tiny_anchor_masks
     else:
-        model = YoloV3(FLAGS.resize, training=True, classes=FLAGS.num_classes)
+        model = YoloV3(FLAGS.size, training=True, classes=FLAGS.num_classes)
         anchors = yolo_anchors
         anchor_masks = yolo_anchor_masks
 
@@ -85,10 +85,10 @@ def setup_model():
         # reset top layers
         if FLAGS.tiny:
             model_pretrained = YoloV3Tiny(
-                FLAGS.resize, training=True, classes=FLAGS.weights_num_classes or FLAGS.num_classes)
+                FLAGS.size, training=True, classes=FLAGS.weights_num_classes or FLAGS.num_classes)
         else:
             model_pretrained = YoloV3(
-                FLAGS.resize, training=True, classes=FLAGS.weights_num_classes or FLAGS.num_classes)
+                FLAGS.size, training=True, classes=FLAGS.weights_num_classes or FLAGS.num_classes)
         model_pretrained.load_weights(FLAGS.weights)
 
         if FLAGS.transfer == 'darknet':
@@ -141,32 +141,42 @@ def main(_argv):
         model, optimizer, loss, anchors, anchor_masks = setup_model()
 
     if FLAGS.train_dataset:
+        with open(FLAGS.train_anno_path) as file:
+            train_anno_file = json.load(file)
         train_dataset = tf.data.Dataset.from_generator(partial(dataset.load_and_tranform_generator, 
-            FLAGS.train_dataset, FLAGS.train_anno_path),
+            FLAGS.train_dataset, train_anno_file),
                 output_signature=(tf.TensorSpec(shape=(None, None, 3), dtype=tf.float32),
                     tf.TensorSpec(shape=(None, 5), dtype=tf.float32)))
-        train_dataset = train_dataset.map(lambda x, y: dataset.resize_dataset_presering_aspect_ratio(x, y, FLAGS.resize))
-        train_dataset = train_dataset.map(lambda x, y: (x, dataset.split_and_transform_target_columns(y)))
+        train_dataset = train_dataset.map(lambda x, y: dataset.resize_dataset_presering_aspect_ratio(
+            x, y, FLAGS.size))
+        train_dataset = train_dataset.map(lambda x, y: (
+            x, dataset.split_and_transform_target_columns(y)))
     else:
         train_dataset = dataset.load_fake_dataset()
     train_dataset = train_dataset.shuffle(buffer_size=512)
     train_dataset = train_dataset.batch(FLAGS.batch_size)
-    train_dataset = train_dataset.map(lambda x, y: (x, dataset.transform_targets_coco(y, anchors, anchor_masks, FLAGS.resize)))
+    train_dataset = train_dataset.map(lambda x, y: (
+        x, dataset.transform_targets(y, anchors, anchor_masks, FLAGS.size)))
     train_dataset = train_dataset.prefetch(
         buffer_size=tf.data.experimental.AUTOTUNE)
 
     if FLAGS.val_dataset:
+        with open(FLAGS.val_anno_path) as file:
+            val_anno_file = json.load(file)
         val_dataset = tf.data.Dataset.from_generator(partial(dataset.load_and_tranform_generator, 
-            FLAGS.val_dataset, FLAGS.val_anno_path),
+            FLAGS.train_dataset, val_anno_file),
                 output_signature=(tf.TensorSpec(shape=(None, None, 3), dtype=tf.float32),
                     tf.TensorSpec(shape=(None, 5), dtype=tf.float32)))
-        val_dataset = val_dataset.map(lambda x, y: dataset.resize_dataset_presering_aspect_ratio(x, y, FLAGS.resize))
-        val_dataset = val_dataset.map(lambda x, y: (x, dataset.split_and_transform_target_columns(y)))
+        val_dataset = val_dataset.map(lambda x, y: dataset.resize_dataset_presering_aspect_ratio(
+            x, y, FLAGS.size))
+        val_dataset = val_dataset.map(lambda x, y: (
+            x, dataset.split_and_transform_target_columns(y)))
     else:
         val_dataset = dataset.load_fake_dataset()
     val_dataset = val_dataset.shuffle(buffer_size=512)
     val_dataset = val_dataset.batch(FLAGS.batch_size)
-    val_dataset = val_dataset.map(lambda x, y: (x, dataset.transform_targets_coco(y, anchors, anchor_masks, FLAGS.resize)))
+    val_dataset = val_dataset.map(lambda x, y: (x, dataset.transform_targets(
+        y, anchors, anchor_masks, FLAGS.size)))
     val_dataset = val_dataset.prefetch(
         buffer_size=tf.data.experimental.AUTOTUNE)
 
