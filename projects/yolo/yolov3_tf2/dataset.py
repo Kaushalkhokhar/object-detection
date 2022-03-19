@@ -10,7 +10,12 @@ import cv2
 
 
 @tf.function
-def transform_targets_for_output(y_true, grid_size, anchor_idxs):
+def transform_targets_for_output(y_true, grid_size, anchor_idxs, divisor):
+    """
+    y_true of shape = (batch_size, number_of_boxes, (xmin, ymin, xmax, ymax, class, best_anchor_index)
+    
+    """
+
     # y_true: (N, boxes, (x1, y1, x2, y2, class, best_anchor))
     N = tf.shape(y_true)[0]
 
@@ -35,7 +40,7 @@ def transform_targets_for_output(y_true, grid_size, anchor_idxs):
                 box_xy = (y_true[i][j][0:2] + y_true[i][j][2:4]) / 2
 
                 anchor_idx = tf.cast(tf.where(anchor_eq), tf.int32)
-                grid_xy = tf.cast(box_xy // (1/grid_size), tf.int32)
+                grid_xy = tf.cast(box_xy // divisor, tf.int32)
 
                 # grid[y][x][anchor] = (tx, ty, bw, bh, obj, class)
                 indexes = indexes.write(
@@ -44,14 +49,23 @@ def transform_targets_for_output(y_true, grid_size, anchor_idxs):
                     idx, [box[0], box[1], box[2], box[3], 1, y_true[i][j][4]])
                 idx += 1
 
-    # tf.print(indexes.stack())
-    # tf.print(updates.stack())
 
     return tf.tensor_scatter_nd_update(
         y_true_out, indexes.stack(), updates.stack())
 
 
 def transform_targets(y_train, anchors, anchor_masks, size):
+    """
+    y_train shape = (batch_size, number_of_boxes, (xmin, ymin, xmax, ymax, class))
+    anchors = np.array([(10, 13), (16, 30), (33, 23), (30, 61), (62, 45),
+                    (59, 119), (116, 90), (156, 198), (373, 326)],
+                    np.float32) / 416
+    anchor_masks = np.array([[6, 7, 8], [3, 4, 5], [0, 1, 2]])
+    size = 416
+    
+    """
+    
+    
     y_outs = []
     grid_size = size // 32
 
@@ -70,9 +84,10 @@ def transform_targets(y_train, anchors, anchor_masks, size):
 
     y_train = tf.concat([y_train, anchor_idx], axis=-1)
 
-    for anchor_idxs in anchor_masks:
+    divisors = [32, 16, 8]
+    for divisor, anchor_idxs in zip(divisors, anchor_masks):
         y_outs.append(transform_targets_for_output(
-            y_train, grid_size, anchor_idxs))
+            y_train, grid_size, anchor_idxs, divisor))
         grid_size *= 2
 
     return tuple(y_outs)
@@ -138,7 +153,7 @@ def load_tfrecord_dataset(file_pattern, class_file, size=416):
 
 def load_fake_dataset():
     x_train = tf.image.decode_jpeg(
-        open('./data/girl.png', 'rb').read(), channels=3)
+        open(r"D:\ObjectDetection\projects\yolo\data\girl.png", 'rb').read(), channels=3)
     x_train = tf.expand_dims(x_train, axis=0)
 
     labels = [
@@ -149,6 +164,8 @@ def load_fake_dataset():
     y_train = tf.convert_to_tensor(labels, tf.float32)
     y_train = tf.expand_dims(y_train, axis=0)
 
+    tf.print(tf.shape(x_train))
+    tf.print(tf.shape(y_train))
     return tf.data.Dataset.from_tensor_slices((x_train, y_train))
 
 ###################################################
@@ -193,7 +210,7 @@ def resize_dataset(x, y, resize_dims=(350, 300)):
 
     return x, y
 
-def split_and_transform_target_columns(y):
+def split_and_transform_target_columns(x, y):
     """
     Also applicable after batch size
     - N is batch_size
@@ -210,7 +227,7 @@ def split_and_transform_target_columns(y):
 
     y = tf.concat([y12, y34, classes], axis=-1)
 
-    return y
+    return x, y
 
 
 def resize_dataset_presering_aspect_ratio(x, y, size=400):
@@ -261,5 +278,5 @@ def resize_dataset_presering_aspect_ratio(x, y, size=400):
 
     paddings = [[0, FLAGS.yolo_max_boxes - tf.shape(y)[0]], [0, 0]]
     y = tf.pad(y, paddings)
-    
+
     return x, y
