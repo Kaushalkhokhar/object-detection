@@ -156,7 +156,7 @@ def draw_labels_coco(xs, ys, class_names):
             x1y1 = tuple(np.array(np.flip(boxes[i][0:2])).astype(np.int32))
             x2y2 = tuple(np.array(np.flip(boxes[i][2:4])).astype(np.int32))
             img = cv2.rectangle(img, x1y1, x2y2, (1, 0, 0), 2)
-            img = cv2.putText(img, class_names[classes[i]],
+            img = cv2.putText(img, class_names[classes[i]-1],
                             x1y1, cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (0, 0, 1), 1)
         imgs[h] = img
@@ -182,7 +182,7 @@ def get_classnames(file_path):
     with open(file_path) as file:
         jfile = json.load(file)
 
-    class_names = ["backgroud"]
+    class_names = []
     i = 0
     for item in jfile["categories"]:
         for _ in range(item["id"]-i):

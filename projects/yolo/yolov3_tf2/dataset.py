@@ -64,8 +64,6 @@ def transform_targets(y_train, anchors, anchor_masks, size):
     size = 416
     
     """
-    
-    
     y_outs = []
     grid_size = size // 32
 
@@ -164,8 +162,6 @@ def load_fake_dataset():
     y_train = tf.convert_to_tensor(labels, tf.float32)
     y_train = tf.expand_dims(y_train, axis=0)
 
-    tf.print(tf.shape(x_train))
-    tf.print(tf.shape(y_train))
     return tf.data.Dataset.from_tensor_slices((x_train, y_train))
 
 ###################################################

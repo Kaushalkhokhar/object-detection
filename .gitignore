@@ -141,3 +141,4 @@ dmypy.json
 
 # custom files
 **/datasets/
+**/models/
